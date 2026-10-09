@@ -1,0 +1,4 @@
+backdrops/*
+!backdrops/0[1-9].jpg
+!backdrops/10.jpg
+*.pdf
