@@ -1,4 +1,4 @@
-"""Mantl Movie Journal, Vol. 1, for reMarkable Paper Pure (1404x1872, portrait).
+"""Mantl Movie Journal, for reMarkable Paper Pure (1404x1872, portrait).
 
 Backdrops: put images in backdrops/NN.jpg (NN = entry number, e.g. 01.jpg).
 If a file is missing and the entry has a TMDB path, the script tries to
@@ -62,6 +62,15 @@ RETRO = [
     ("Dogville", "Lars von Trier", "2003", "r3xsFBD1VTUusk393bBc7SsDUJe"),
 ]
 
+# Off the List: open slots for films not planned above. Titles stay handwritten.
+# To add a backdrop later, put its TMDB backdrop path in the slot (or drop an image
+# at backdrops/NN.jpg) and rebuild. The page count never changes, so the new PDF
+# can replace the old one on the Pure without losing ink.
+OFF_LIST_SLOTS = 20
+OFF_LIST = {
+    # 31: "tmdbBackdropPathWithoutJpg",
+}
+
 # vertical crop position per entry: 0 = keep the top, 1 = keep the bottom (default 0.4)
 CROP_TOP = {1: 0.12, 2: 0.08, 3: 0.35, 4: 0.0, 5: 0.4, 6: 0.25,
             7: 0.6, 8: 0.3, 9: 0.12, 10: 0.15}
@@ -76,7 +85,7 @@ MID = Color(0.38, 0.38, 0.38)
 RULE = Color(0.74, 0.74, 0.74)
 SOFT = Color(0.88, 0.88, 0.88)
 
-TABS = [("Index", "p_index"), ("Watchlist", "p_watch"), ("Year", "p_year")]
+TABS = [("Index", "p_index"), ("Off List", "p_off"), ("Watchlist", "p_watch"), ("Year", "p_year")]
 
 
 def Y(y):
@@ -267,18 +276,18 @@ def tape_label(c, x, y, num, kind):
 
 # ---------- pages ----------
 
-def entry_page(c, num, film, kind):
+def entry_page(c, num, film, kind, backdrop=None):
     tabs(c)
     bx, by, bw = L, 64, CR - L
     bh = int(bw / 2.6)
-    img = get_backdrop(num, film[3] if film else None, bw, bh)
+    img = get_backdrop(num, film[3] if film else backdrop, bw, bh)
     backdrop_frame(c, bx, by, bw, bh, img)
 
     split = L + int((CR - L) * 0.68)
 
     y = by + bh + 112
     label(c, L, y - 62, "Title")
-    tag = "New release" if kind == "SCREENER" else "Retro"
+    tag = {"SCREENER": "New release", "RETRO": "Retro", "OFF": "Off the list"}[kind]
     text(c, CR, y - 62, f"NO. {num:03d}  ·  {tag.upper()}", 22, "Barlow-Semi", MID, "r", spacing=2.5)
     if film:
         size = fit_size(c, film[0], "Marker", 54, CR - L)
@@ -368,6 +377,27 @@ def index_page(c, entries):
         y = row(y, num, film, f"e{num}")
 
 
+def off_list_page(c, slots):
+    tabs(c, "Off List")
+    page_heading(c, "Off the List", f"{len(slots)} open slots")
+    row_h = 74
+    y = 230
+    text(c, L, y + 6, "Unplanned watches", 40, "Marker")
+    text(c, CR - 250 - 13, y - 4, "RATING", 18, "Barlow-Semi", MID)
+    text(c, CR - 39, y - 4, "SEEN", 18, "Barlow-Semi", MID, "c")
+    y += 22
+    hline(c, L, CR, y, INK, 2)
+    for num in slots:
+        top = y
+        y += row_h
+        text(c, L + 4, y - 16, f"{num:03d}", 26, "Barlow-Bold", MID)
+        for i in range(5):
+            star(c, CR - 250 + i * 34, y - 28, 13)
+        box(c, CR - 52, y - 42, 26, 26, stroke=MID, lw=2)
+        hline(c, L, CR, y, RULE)
+        link(c, L, top, 80, row_h, f"e{num}")
+
+
 def watchlist_page(c):
     tabs(c, "Watchlist")
     page_heading(c, "Watchlist", f"Up next · Vol. {VOLUME + 1}")
@@ -427,15 +457,22 @@ def build():
     c.setTitle(f"Mantl Movie Journal — Vol. {VOLUME}")
     c.setAuthor("Ali Atri")
 
+    off = list(range(len(entries) + 1, len(entries) + OFF_LIST_SLOTS + 1))
+
     c.bookmarkPage("p_index"); index_page(c, entries); c.showPage()
+    c.bookmarkPage("p_off"); off_list_page(c, off); c.showPage()
     c.bookmarkPage("p_watch"); watchlist_page(c); c.showPage()
     c.bookmarkPage("p_year"); year_page(c); c.showPage()
     for num, film, kind in entries:
         c.bookmarkPage(f"e{num}")
         entry_page(c, num, film, kind)
         c.showPage()
+    for num in off:
+        c.bookmarkPage(f"e{num}")
+        entry_page(c, num, None, "OFF", OFF_LIST.get(num))
+        c.showPage()
     c.save()
-    print("wrote", OUT, "pages:", 3 + len(entries))
+    print("wrote", OUT, "pages:", 4 + len(entries) + len(off))
 
 
 if __name__ == "__main__":
