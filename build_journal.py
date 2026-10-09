@@ -398,22 +398,60 @@ def off_list_page(c, slots):
         link(c, L, top, 80, row_h, f"e{num}")
 
 
-def watchlist_page(c):
+def load_watchlist():
+    path = os.path.join(HERE, "watchlist.txt")
+    if not os.path.exists(path):
+        return []
+    rows = []
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if line:
+            title, _, year = line.partition("|")
+            rows.append((title, year))
+    return rows
+
+
+WL_ROW = 44
+WL_TOP = 262
+
+
+def watchlist_rows_per_page():
+    return 2 * ((H - 64 - WL_TOP) // WL_ROW)
+
+
+def watchlist_page(c, films, page_no, pages, total):
     tabs(c, "Watchlist")
-    page_heading(c, "Watchlist", f"Up next · Vol. {VOLUME + 1}")
-    y = 230
-    gap = 64
-    mid = L + (CR - L) // 2
-    text(c, L, y + 6, "New Releases", 40, "Marker")
-    text(c, mid + 20, y + 6, "Retro", 40, "Marker")
-    y += 22
-    hline(c, L, CR, y, INK, 2)
-    yy = y + gap
-    while yy <= H - 64:
-        for x0, x1 in [(L, mid - 20), (mid + 20, CR)]:
-            box(c, x0, yy - 34, 24, 24, stroke=MID, lw=2)
-            hline(c, x0 + 40, x1, yy)
-        yy += gap
+    sub = f"{total} films · from Mantl" if page_no == 1 else f"Page {page_no} of {pages}"
+    page_heading(c, "Watchlist", sub)
+    gap = 40
+    col_w = (CR - L - gap) // 2
+    per_col = (H - 64 - WL_TOP) // WL_ROW
+    for col in range(2):
+        x0 = L + col * (col_w + gap)
+        x1 = x0 + col_w
+        text(c, x1 - 27, WL_TOP - 14, "SLOT", 18, "Barlow-Semi", MID, "c")
+        hline(c, x0, x1, WL_TOP - 4, INK, 2)
+        chunk = films[col * per_col:(col + 1) * per_col]
+        chunk = chunk + [None] * (per_col - len(chunk))
+        for i, film in enumerate(chunk):
+            y = WL_TOP - 4 + (i + 1) * WL_ROW
+            if film is None:  # blank row for films added later
+                box(c, x0, y - 32, 22, 22, stroke=MID, lw=1.8)
+                box(c, x1 - 54, y - 36, 54, 30, stroke=RULE, lw=1.4)
+                hline(c, x0, x1, y, RULE)
+                continue
+            title, year = film
+            box(c, x0, y - 32, 22, 22, stroke=MID, lw=1.8)
+            text(c, x1 - 70, y - 13, year, 22, "Barlow", MID, "r")
+            max_w = col_w - 36 - 120
+            size = fit_size(c, title, "Barlow-Semi", 27, max_w, min_size=19)
+            t = title
+            while c.stringWidth(t, "Barlow-Semi", size) > max_w and len(t) > 4:
+                t = t[:-2].rstrip() + "…"
+                t = t[:-1] if t.endswith("……") else t
+            text(c, x0 + 36, y - 13, t, size, "Barlow-Semi")
+            box(c, x1 - 54, y - 36, 54, 30, stroke=RULE, lw=1.4)
+            hline(c, x0, x1, y, RULE)
 
 
 def year_page(c):
@@ -461,7 +499,14 @@ def build():
 
     c.bookmarkPage("p_index"); index_page(c, entries); c.showPage()
     c.bookmarkPage("p_off"); off_list_page(c, off); c.showPage()
-    c.bookmarkPage("p_watch"); watchlist_page(c); c.showPage()
+    wl = load_watchlist()
+    per = watchlist_rows_per_page()
+    wl_pages = max(1, -(-len(wl) // per))
+    for n in range(wl_pages):
+        if n == 0:
+            c.bookmarkPage("p_watch")
+        watchlist_page(c, wl[n * per:(n + 1) * per], n + 1, wl_pages, len(wl))
+        c.showPage()
     c.bookmarkPage("p_year"); year_page(c); c.showPage()
     for num, film, kind in entries:
         c.bookmarkPage(f"e{num}")
@@ -472,7 +517,7 @@ def build():
         entry_page(c, num, None, "OFF", OFF_LIST.get(num))
         c.showPage()
     c.save()
-    print("wrote", OUT, "pages:", 4 + len(entries) + len(off))
+    print("wrote", OUT, "pages:", 3 + wl_pages + len(entries) + len(off))
 
 
 if __name__ == "__main__":
